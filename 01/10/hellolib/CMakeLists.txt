@@ -1,1 +1,1 @@
-add_library(hellolib STATIC hello.cpp)
+add_library(hellochecklib STATIC hello.cpp)

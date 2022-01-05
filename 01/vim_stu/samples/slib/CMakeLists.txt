@@ -1,0 +1,1 @@
+add_library(slib STATIC slib.cpp)
