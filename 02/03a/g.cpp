@@ -1,3 +1,12 @@
+/*
+ * @Descripttion: 
+ * @version: 
+ * @Author: HuSharp
+ * @Date: 2022-01-02 23:37:24
+ * @LastEditors: HuSharp
+ * @LastEditTime: 2022-01-16 23:52:43
+ * @@Email: 8211180515@csu.edu.cn
+ */
 #include <iostream>
 #include <string>
 
@@ -43,7 +52,8 @@ void show(Pig pig) {
 }
 
 int main() {
-    Pig pig;
+    Pig pig1 = {"happy", 70};
+    Pig pig = pig1;
 
     show(pig);
     return 0;
