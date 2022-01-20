@@ -9,6 +9,9 @@ int main() {
         sum += vi;
     }
 
+    for (int vi : v)
+        sum += vi;
+
     std::cout << sum << std::endl;
     return 0;
 }
