@@ -199,13 +199,13 @@ void foo()
 模板参数除了类型外（包括基本类型、结构、类类型等），也可以是一个整型数（Integral Number）。**这里的整型数比较宽泛，包括布尔型，不同位数、有无符号的整型，甚至包括指针**。我们将整型的模板参数和类型作为模板参数来做一个对比：
 
 ```cpp
-template <typename T> class TemplateWithType;
+template <typename T = int> class TemplateWithType;	// 可以有默认参数
 template <int      V> class TemplateWithValue;
 ```
 
 可看出 `typename` 的意思：它相当于是模板参数的“类型”，告诉你 `T` 是一个 `typename`。
 
-整型模板参数最基本的用途，就是定义一个常数。
+**整型模板参数最基本的用途，就是定义一个常数。**
 
 ```cpp
 template <int i> class A 
@@ -229,5 +229,246 @@ void foo()
     D<&A<3>::foo> d;       // 丧心病狂啊！它还能是一个成员函数指针！
     int x = Add<3>(5);     // x == 8。因为整型模板参数无法从函数参数获得，所以只能是手工指定啦。
 }
+```
+
+当然也可以和 class 一起使用，会进行推断。
+
+> 为什么要支持整数作为模板参数？因为是编译期常量
+>
+> template <int N> 传入的 N，是一个编译期常量，每个不同的 N，编译器都会单独生成一份代码，从而可以对他做单独的优化。
+> 而 func(int N)，则变成运行期常量，编译器无法自动优化，只能运行时根据被调用参数 N 的不同。
+> **比如 show_times<0>() 编译器就可以自动优化为一个空函数**。因此模板元编程对高性能编程很重要。
+> 通常来说，模板的内部实现需要被暴露出来，除非使用特殊的手段，否则，定义和实现都必须放在头文件里。
+> 但也正因如此，如果过度使用模板，会导致生成的二进制文件大小剧增，编译变得很慢等。
+
+```cpp
+template <int N = 1, class T>
+void show_times(T msg) {
+    for (int i = 0; i < N; i++) {
+        std::cout << msg << std::endl;
+    }
+}
+
+int main() {
+    show_times("one");
+    show_times<3>(42);
+    show_times<4>('%');
+}
+```
+
+
+
+与特化类似，可以使用函数重载来调用特定的函数。
+
+```cpp
+template <class T>
+T twice(T t) {
+    return t * 2;
+}
+
+std::string twice(std::string t) {
+    return t + t;
+}
+```
+
+但存在一个问题，那就是如果我用 `twice(“hello”)` 这样去调用，他不会自动隐式转换到 std::string 并调用那个特化函数，而是会去调用模板函数 twice<char *>(“hello”)，从而出错。
+可能的解决方案：SFINAE（Substitution failure is not an error ）。
+
+> std/boost库中的 `enable_if` 是 SFINAE 最直接也是最主要的应用。
+
+
+
+### 模板的应用
+
+#### 编译期优化案例
+
+在右边这个案例中，我们声明了一个 sumto 函数，作用是求出从 1 到 n 所有数字的和。
+用一个 debug 参数控制是否输出调试信息。
+
+```cpp
+int sumto(int n, bool debug) {
+    int res = 0;
+    for (int i = 1; i <= n; i++) {
+        res += i;
+        if (debug)			// <-------- 此处
+            std::cout << i << "-th: " << res << std::endl;
+    }
+    return res;
+}
+
+int main() {
+    std::cout << sumto(4, true) << std::endl;
+    std::cout << sumto(4, false) << std::endl;
+    return 0;
+}
+```
+
+但是这样 debug 是**运行时判断**，这样即使是 debug 为 false 也会浪费 CPU 时间。即还是会存在个分支判断。
+
+因此可以把 debug 改成模板参数，这样就是**编译期常量**。编译器会生成两份函数 sumto<true> 和 sumto<false>。前者保留了调试用的打印语句，后者则完全为性能优化而可以去掉打印语句。
+
+```cpp
+template <bool debug>
+int sumto(int n) {
+    int res = 0;
+    for (int i = 1; i <= n; i++) {
+        res += i;
+        if (debug)
+            std::cout << i << "-th: " << res << std::endl;
+    }
+    return res;
+}
+
+int main() {
+    std::cout << sumto<true>(4) << std::endl;
+    std::cout << sumto<false>(4) << std::endl;
+    return 0;
+}
+```
+
+后者其实在编译器看来就是 `if (false) std::cout << ...` 这样显然是会被他自动优化掉的。
+
+> 可以使用 [constexpr](https://zh.wikipedia.org/wiki/Constexpr) 来得到编译期函数和常量等
+>
+> [C++11/14 constexpr 用法](https://www.jianshu.com/p/34a2a79ea947)
+>
+> 比如可以：`constexpr` 强调 `debug` 变量为编译期常量，且强调 `isnegative` 为编译期函数。
+>
+> ```cpp
+> template <bool debug>
+> int sumto(int n) {
+>     int res = 0;
+>     for (int i = 1; i <= n; i++) {
+>         res += i;
+>         if constexpr (debug)
+>             std::cout << i << "-th: " << res << std::endl;
+>     }
+>     return res;
+> }
+> 
+> constexpr bool isnegative(int n) {
+>     return n < 0;
+> }
+> 
+> int main() {
+>     constexpr bool debug = isnegative(-2014);
+>     std::cout << sumto<debug>(4) << std::endl;
+>     return 0;
+> }
+> ```
+
+
+
+#### 模板的惰性
+
+![image-20220123143203718](../assets/blog_image/README/image-20220123143203718.png)
+
+这是因为编译器对模板的编译是惰性的，即**只有当前 .cpp 文件用到了这个模板，该模板里的函数才会被定义。**而我们的 sumto.cpp 中没有用到 sumto<> 函数的任何一份定义，所以 main.cpp 里只看到 sumto<> 函数的两份声明，从而出错。
+
+> 解决：在看得见 sumto<> 定义的 sumto.cpp 里，增加两个显式编译模板的声明：
+>
+> ```cpp
+> template int sumto<true>(int n);
+> template int sumto<false>(int n);
+> ```
+
+一般来说，会建议模板不要分离声明和定义，直接写在头文件里即可。如果分离还要**罗列出所有模板参数**的排列组合，违背了开-闭原则。
+
+> 因此运用这个规则，又可以整花活：
+>
+> ```cpp
+> template <class T = void>
+> void func_that_never_pass_compile() {
+>     "字符串" = 2333;
+> }
+> ```
+>
+> 即实现一个假模板 `<class T = void>` ，这样由于编译惰性，此函数是不会被编译的。只有 `main` 调用之后，才会被编译。
+>
+> 用一个假模板实现延迟编译的技术，可以加快编译的速度，用于代理模式等。
+
+
+
+## auto 自动类型推导
+
+没有 auto 的话，需要声明一个变量，必须重复一遍他的类型，非常麻烦：
+
+因此 C++11 引入了 auto，使用 auto 定义的变量，其类型会自动根据等号右边的值来确定：
+
+```cpp
+    auto p = std::make_shared<MyClassWithVeryLongName>();
+    std::shared_ptr<MyClassWithVeryLongName> long_name = std::make_shared<MyClassWithVeryLongName>();
+```
+
+> - 不能单独声明
+>
+> ```cpp
+> auto p;
+> p = std::make_shared<MyClassWithVeryLongName>();
+> ```
+>
+> - 不能用在类成员中。
+>
+> - 可以用作函数的返回类型：
+>
+>   使用 auto 以后，**会自动被推导为 return 右边的类型**。
+>   不过也有三点注意事项：
+>
+>   - 当函数有多条 return 语句时，所有语句的返回类型必须一致，否则 auto 会报错。
+>   - 当函数没有 return 语句时，auto 会被推导为 void。
+>   - 如果声明和实现分离了，则不能声明为 auto。比如：auto func(); // 错误
+>
+> - auto 也可以定义引用。
+>
+>   ```cpp
+>   int x = 100;
+>   auto &ref = x;
+>   ```
+>
+> - 
+
+### 左右值引用
+
+读读此文：[一文读懂C++右值引用和std::move](https://zhuanlan.zhihu.com/p/335994370)
+
+1. 从性能上讲，左右值引用没有区别，传参使用左右值引用都可以避免拷贝。
+2. 右值引用可以直接指向右值，也可以通过std::move指向左值；而左值引用只能指向左值(const左值引用也能指向右值)。
+3. 作为函数形参时，右值引用更灵活。虽然const左值引用也可以做到左右值都接受，但它无法修改，有一定局限性。
+
+> 可以通过 decltype(变量名) 获取变量定义时候的类型。
+>
+> 值得注意的是：`decltype((a))`中 `((a))` 被编译器理解为表达式，看做引用。
+>
+> ```cpp
+> decltype(a);    // int
+> decltype((a));  // int &
+> ```
+>
+> 可以使用一个 `is_same` 进行 `type_traits` 进行参数是否相同判断。
+>
+> ```cpp
+> std::cout << std::is_same<int const, const int>::value;
+> ```
+
+`decltype(auto)` 会自动推导为 func() 的返回类型。
+
+以下两者的区别是：如果 `func` 为 `int& func()` 那么 `auto p` 会报错。而`decltype(auto) p = func();` 相当于 `decltype(func()) p = func();` 会通过。
+
+```cpp
+decltype(auto) p = func();
+auto p = func();
+```
+
+ 
+
+
+
+### `using` 
+
+typedef A B，使用using B=A可以进行同样的操作。
+
+```cpp
+typedef vector<int> V1; 
+using V2 = vector<int>;
 ```
 
