@@ -33,6 +33,7 @@
         "typeinfo": "cpp",
         "utility": "cpp",
         "numeric": "cpp",
-        "memory": "cpp"
+        "memory": "cpp",
+        "functional": "cpp"
     }
 }

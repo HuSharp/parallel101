@@ -3,7 +3,7 @@
 
 template <class T1, class T2>
 auto add(std::vector<T1> const &a, std::vector<T2> const &b) {
-    using T0 = decltype(T1{} + T2{});
+    using T0 = decltype(T1{} + T2{});   // decltype 获取类型
     std::vector<T0> ret;
     for (size_t i = 0; i < std::min(a.size(), b.size()); i++) {
         ret.push_back(a[i] + b[i]);
