@@ -461,8 +461,6 @@ auto p = func();
 
  
 
-
-
 ### `using` 
 
 typedef A B，使用using B=A可以进行同样的操作。
@@ -472,3 +470,221 @@ typedef vector<int> V1;
 using V2 = vector<int>;
 ```
 
+
+
+
+
+## 函数式编程
+
+可以利用模板参数
+
+```cpp
+template <typename T>
+void call_write(T func) {
+    func(0);
+    func(1);
+}
+
+void print_n(int n) {
+    printf("Number: %d\n", n);
+}
+
+void print_f(float f) {
+    printf("Number: %f\n", f);
+}
+
+int main(int argc, char const *argv[])
+{
+    call_write(print_n);
+    call_write(print_f);
+    return 0;
+}
+
+// 00000000000006c2 <_Z10call_writeIiEvPFvT_E>:
+// 00000000000006e7 <_Z10call_writeIfEvPFvT_E>:
+```
+
+### `lambda`
+
+C++11 引入的 lambda 表达式允许我们在函数体内创建一个函数，大大地方便了函数式编程。
+语法就是先一个空的 []，然后是参数列表，然后是 {} 包裹的函数体。
+
+```cpp
+    auto myfunc = [] (int n) {
+        printf("lambda %d \n", n);
+    };
+    call_write(myfunc);
+```
+
+#### lambda 作为参数
+
+lambda 表达式的返回类型写在参数列表后面，用一个箭头 -> 表示。
+
+```cpp
+    auto myfunc = [] (int n) -> int {
+        return n * 2;
+    };
+    call_write(myfunc);
+```
+
+如果 lambda 表达式不通过 -> 指定类型，则和 -> auto 等价，自动根据函数体内的 return 语句决定返回类型，如果没有 return 语句则相当于 -> void。
+
+```cpp
+    auto myfunc = [] (int n) {
+        return n * 2;	// 返回类型自动推导为 int
+    };
+    call_write(myfunc);
+```
+
+还有一个闭包(closure)
+
+lambda 函数体中，还可以使用定义他的 main 函数中的变量，只需要把方括号 [] 改成 [&] 即可：
+
+函数**可以引用定义位置所有的变量**，这个特性在函数式编程中称为闭包(closure)。
+
+```cpp
+int main() {
+    int fac = 2;
+    int counter = 0;
+    auto twice = [&] (int n) {
+        counter++;			// 此处也可以调用
+        return n * fac;		// fac
+    };
+    call_twice(twice);
+    std::cout << "调用了 " << counter << " 次" << std::endl;
+    return 0;
+}
+```
+
+值得注意的是，上面的 lambda 函数由于调用 `counter` 和 `fac`，因此为 16 字节。可以对 `call_twice` 使用 `const&` 调用，这样的话只需要 8 字节。
+
+```cpp
+void call_twice(Func const &func) {}
+```
+
+#### lambda 作为返回值
+
+**由于 lambda 表达式永远是个匿名类型**，我们需要将 make_twice 的返回类型声明为 auto 让他自动推导。
+
+```cpp
+auto make_twice() {
+    return [] (int n) {
+        return n * 2;
+    };
+}
+
+int main() {
+    auto twice = make_twice();
+    call_twice(twice);
+    return 0;
+}
+```
+
+
+
+#### 作用域问题
+
+然而当我们试图用 [&] 捕获参数 fac 时，却出了问题：
+
+这是因为 [&] 捕获的是引用，是 fac 的地址，而 make_twice 已经返回了，导致 fac 的引用变成了内存中一块已经失效的地址。
+
+总之，如果用 [&]，**请保证 lambda 对象的生命周期不超过他捕获的所有引用的寿命**。
+
+```cpp
+auto make_twice(int fac) {
+    return [&] (int n) {
+        return n * fac;
+    };
+}
+
+int main() {
+    auto twice = make_twice(2);
+    call_twice(twice);		// 调用此函数时发现打印并非 2
+    return 0;
+}
+```
+
+还有一个方法：
+
+这时，我们可以用 [=] 来捕获，他会捕获 fac 的值而不是引用。[=] 会给每一个引用了的变量做一份拷贝，放在 Func 类型中。
+
+```cpp
+auto make_twice(int fac) {
+    return [=] (int n) {
+        return n * fac;
+    };
+}
+```
+
+**不过他会造成对引用变量的拷贝，性能可能会不如 [&]。**
+
+#### lambda 的声明
+
+虽然 <class Func> 这样可以让编译器对每个不同的 lambda 生成一次，有助于优化。
+但是有时候我们希望通过头文件的方式分离声明和实现，或者想加快编译，这时如果再用 template class 作为参数就不行了。
+为了灵活性，可以用 std::function 容器。
+只需在后面尖括号里写函数的返回类型和参数列表即可，比如：
+
+```cpp
+std::function<int(float, char *)>;	// (float, char *) 表示参数，int 表示返回类型
+```
+
+举个栗子：
+
+```cpp
+// 位于 lambda.h
+void call_twice(std::function<int(int)> const &func) {
+    std::cout << func(0) << std::endl;
+    std::cout << func(1) << std::endl;
+    std::cout << "Func 大小: " << sizeof(func) << std::endl;
+}
+// 位于 main.cpp
+std::function<int(int)> make_twice(int fac) {
+    return [=] (int n) {
+        return n * fac;
+    };
+}
+```
+
+#### lambda + 模板
+
+可以将 lambda 表达式的参数声明为 auto，声明为 auto 的参数会自动根据调用者给的参数推导类型，基本上和 template <class T> 等价。
+带 auto 参数的 lambda 表达式，和模板函数一样，同样会有惰性、多次编译的特性。
+
+```cpp
+int main() {
+    auto twice = [] (auto n) {
+        return n * 2;
+    };
+    call_twice(twice);
+    return 0;
+}
+
+/* 等价于：
+template <typename T>
+auto twice(T n) {
+    return n * 2;
+}
+*/
+```
+
+值得注意的是：
+
+lambda 表达式就是一个匿名函数，可以采用一个括号来调用此函数
+
+```cpp
+    int index = [&] {
+        for (int i = 0; i < arr.size(); i++) {
+            if (arr[i] == tofind) {
+                return i;
+            }
+        }
+        return -1;
+    }();
+```
+
+
+
+## variant
+
+variant：安全的 union，存储多个不同类型的值
