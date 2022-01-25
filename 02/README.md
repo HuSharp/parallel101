@@ -376,6 +376,7 @@ pig = pig2;        // 拷贝赋值
 > ref_a = 6;
 > ```
 
+
 swap 相当于使用 tmp 临时对象
 
 ```cpp
@@ -419,13 +420,13 @@ void test_swap() {
 
 所谓移动语义，指的就是以移动而非深拷贝的方式初始化含有指针成员的类对象。简单的理解，移动语义指的就是将其他对象（通常是临时对象）拥有的内存资源“移为已用”。
 
-Stashed changes
+所谓移动语义，指的就是以移动而非深拷贝的方式初始化含有指针成员的类对象。简单的理解，移动语义指的就是将其他对象（通常是临时对象）拥有的内存资源“移为已用”。
+
 ![image-20220118003517647](../assets/blog_image/README/image-20220118003517647.png)
 
 还存在一个小技巧：如果有移动赋值函数，可以删除拷贝赋值函数
 
 ![image-20220118003657900](../assets/blog_image/README/image-20220118003657900.png)
-
 
 
 ### 五个语句
@@ -451,6 +452,7 @@ Stashed changes
 3. Widget &`operator=(const Widget& w);`
 4. `Widget(Widget&& w);`
 5. Widget &`operator=(Widget&&`);
+
 
 
 
