@@ -34,6 +34,7 @@
         "utility": "cpp",
         "numeric": "cpp",
         "memory": "cpp",
-        "functional": "cpp"
+        "functional": "cpp",
+        "variant": "cpp"
     }
 }
