@@ -1,8 +1,7 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 #include "helper_cuda.h"
-#include <vector>
-#include "CudaAllocator.h"
+#include <thrust/universal_vector.h>
 
 template <class Func>
 __global__ void parallel_for(int n, Func func) {
@@ -15,9 +14,16 @@ __global__ void parallel_for(int n, Func func) {
 int main() {
     int n = 65536;
     float a = 3.14f;
-    std::vector<float, CudaAllocator<float>> x(n);
+    thrust::universal_vector<float> x(n);
+    thrust::universal_vector<float> y(n);
 
-    parallel_for<<<n / 512, 128>>>(n, [x = x.data()] __device__ (int i) {
+    for (int i = 0; i < n; i++) {
+        x[i] = std::rand() * (1.f / RAND_MAX);
+        y[i] = std::rand() * (1.f / RAND_MAX);
+    }
+
+    parallel_for<<<n / 512, 128>>>(n, [a, x = x.data(), y = y.data()] __device__ (int i) {
+        x[i] = a * x[i] + y[i];
     });
     checkCudaErrors(cudaDeviceSynchronize());
 

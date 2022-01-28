@@ -1,17 +1,17 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 
-constexpr const char *cuthead(const char *p) {
-    return p + 1;
+__host__ __device__ void say_hello() {
+    printf("Hello, world!\n");
 }
 
 __global__ void kernel() {
-    printf(cuthead("Gello, world!\n"));
+    say_hello();
 }
 
 int main() {
     kernel<<<1, 1>>>();
     cudaDeviceSynchronize();
-    printf(cuthead("Cello, world!\n"));
+    say_hello();
     return 0;
 }
